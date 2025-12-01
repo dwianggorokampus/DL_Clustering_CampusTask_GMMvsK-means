@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero" style="padding: 2rem 0;">
+    <h1>Model Specifications</h1>
+    <p>Technical details of the deployed clustering models.</p>
+</section>
+
+<div class="card-grid">
+    <div class="card">
+        <h3>K-Means Clustering</h3>
+        <table style="margin-top: 1rem; background: transparent;">
+            {% for key, value in kmeans.items() %}
+            <tr>
+                <td style="border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>{{ key }}</strong></td>
+                <td style="border-bottom: 1px solid rgba(255,255,255,0.1);">{{ value }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <p style="margin-top: 1rem; color: var(--text-muted);">
+            K-Means partitions data into <strong>2 distinct clusters</strong>:
+        <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: var(--text-muted);">
+            <li><strong>Active Customers</strong>: Recent and frequent purchases.</li>
+            <li><strong>Inactive/Lost Customers</strong>: Long time since last purchase and low frequency.</li>
+        </ul>
+        </p>
+        <div style="margin-top: 2rem; text-align: center;">
+            <h4 style="margin-bottom: 1rem;">Cluster Visualization</h4>
+            <img src="{{ url_for('static', filename='images/cluster_plot.png') }}" alt="Cluster Scatter Plot"
+                style="max-width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Gaussian Mixture Model (GMM)</h3>
+        <p>A probabilistic model that assumes all the data points are generated from a mixture of a finite number of
+            Gaussian distributions with unknown parameters.</p>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+            <tr>
+                <td style="padding: 0.5rem; border-bottom: 1px solid var(--glass-border);"><strong>Components:</strong>
+                </td>
+                <td style="padding: 0.5rem; border-bottom: 1px solid var(--glass-border);">{{ gmm.n_components }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem; border-bottom: 1px solid var(--glass-border);"><strong>Covariance
+                        Type:</strong></td>
+                <td style="padding: 0.5rem; border-bottom: 1px solid var(--glass-border);">{{ gmm.covariance_type }}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem; border-bottom: 1px solid var(--glass-border);"><strong>Features:</strong>
+                </td>
+                <td style="padding: 0.5rem; border-bottom: 1px solid var(--glass-border);">{{ gmm.n_features }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+{% endblock %}

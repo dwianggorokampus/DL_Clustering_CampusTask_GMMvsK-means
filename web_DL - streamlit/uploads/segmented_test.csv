@@ -1,0 +1,6 @@
+CustomerID,Recency,Frequency,Monetary,Cluster,Cluster_Name
+CUST001,1064,1,50.0,1,Inactive/Lost Customers
+CUST002,1063,1,200.0,1,Inactive/Lost Customers
+CUST003,1062,1,12.5,1,Inactive/Lost Customers
+CUST004,1061,1,112.5,1,Inactive/Lost Customers
+CUST005,1060,1,312.5,1,Inactive/Lost Customers

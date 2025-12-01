@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero" style="padding: 2rem 0;">
+    <h1>Customer Segmentation</h1>
+    <p>Enter customer metrics to determine their segment.</p>
+</section>
+
+<div style="max-width: 800px; margin: 0 auto;">
+    <div class="card"
+        style="background: rgba(var(--primary-rgb), 0.1); border: 1px solid var(--glass-border); padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h3 style="color: var(--primary-color); margin-bottom: 0.5rem;">ℹ️ How to Use</h3>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin: 0;">
+            Enter transaction details for a single customer. You can add multiple transactions to calculate the RFM
+            metrics automatically.
+        </p>
+        <div
+            style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 4px;">
+            <strong>Example Input:</strong><br>
+            Date: 2023-10-27 | Qty: 12 | Price: 15.50
+        </div>
+    </div>
+
+    <div class="card">
+        <form method="POST" action="{{ url_for('predict') }}" id="predictForm">
+            <p style="margin-bottom: 1rem; color: var(--text-muted);">
+                Enter transaction history for a single customer. The system will calculate RFM metrics automatically.
+            </p>
+
+            <div style="overflow-x: auto; margin-bottom: 1rem;">
+                <table id="transactionTable" style="width: 100%; margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>Invoice Date</th>
+                            <th>Quantity</th>
+                            <th>Unit Price</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="date" name="date[]" required></td>
+                            <td><input type="number" name="quantity[]" step="1" required placeholder="Qty"></td>
+                            <td><input type="number" name="price[]" step="0.01" required placeholder="Price"></td>
+                            <td><button type="button" class="btn-remove" onclick="removeRow(this)"
+                                    style="background: #ff4757; padding: 0.5rem; border-radius: 4px; border: none; color: white; cursor: pointer;">&times;</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="button" class="btn" onclick="addRow()"
+                style="background: rgba(255,255,255,0.1); margin-bottom: 1.5rem; font-size: 0.9rem;">+ Add
+                Transaction</button>
+
+            <div class="form-group">
+                <label for="snapshot_type">Snapshot Date (for Recency calculation)</label>
+                <select id="snapshot_type" name="snapshot_type" onchange="toggleSnapshotDate()">
+                    <option value="today">Use Today's Date</option>
+                    <option value="custom">Custom Date</option>
+                </select>
+                <input type="date" id="snapshot_date" name="snapshot_date" style="display: none; margin-top: 0.5rem;">
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">
+                    For historical data, use a custom date close to the transaction dates.
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="model_type">Select Model</label>
+                <select id="model_type" name="model_type">
+                    <option value="kmeans">K-Means (Recommended)</option>
+                    <option value="gmm">Gaussian Mixture Model (GMM)</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn" style="width: 100%;">Identify Customer Segment</button>
+        </form>
+    </div>
+
+    {% if prediction %}
+    <div class="result-box">
+        {% if prediction.error %}
+        <h3 style="color: #ff4757;">Error</h3>
+        <p>{{ prediction.error }}</p>
+        {% else %}
+        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Predicted Segment</p>
+        <h2>{{ prediction.name }}</h2>
+        <p style="margin-top: 1rem;">Model: {{ prediction.model }} | Cluster ID: {{ prediction.cluster }}</p>
+        {% if prediction.details %}
+        <p style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-muted);">{{ prediction.details }}</p>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    function toggleSnapshotDate() {
+        const snapshotType = document.getElementById('snapshot_type').value;
+        const snapshotDateInput = document.getElementById('snapshot_date');
+        if (snapshotType === 'custom') {
+            snapshotDateInput.style.display = 'block';
+            snapshotDateInput.required = true;
+        } else {
+            snapshotDateInput.style.display = 'none';
+            snapshotDateInput.required = false;
+        }
+    }
+
+    function addRow() {
+        const table = document.getElementById('transactionTable').getElementsByTagName('tbody')[0];
+        const newRow = table.insertRow();
+        newRow.innerHTML = `
+            <td><input type="date" name="date[]" required></td>
+            <td><input type="number" name="quantity[]" step="1" required placeholder="Qty"></td>
+            <td><input type="number" name="price[]" step="0.01" required placeholder="Price"></td>
+            <td><button type="button" class="btn-remove" onclick="removeRow(this)" style="background: #ff4757; padding: 0.5rem; border-radius: 4px; border: none; color: white; cursor: pointer;">&times;</button></td>
+        `;
+    }
+
+    function removeRow(btn) {
+        const row = btn.parentNode.parentNode;
+        const table = document.getElementById('transactionTable').getElementsByTagName('tbody')[0];
+        if (table.rows.length > 1) {
+            row.parentNode.removeChild(row);
+        } else {
+            alert("At least one transaction is required.");
+        }
+    }
+</script>
+{% endblock %}
