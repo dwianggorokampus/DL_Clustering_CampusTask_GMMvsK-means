@@ -529,6 +529,36 @@ elif page == "Batch Grouping":
 elif page == "Model Specs":
     st.title("Model Specifications")
     
+    # Shared Data Loading Function
+    @st.cache_data
+    def get_training_metrics():
+        if os.path.exists('Online Retail.xlsx'):
+            try:
+                df = pd.read_excel('Online Retail.xlsx')
+                df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+                
+                # Use max date + 1 day as snapshot to match training context
+                snapshot_date = df['InvoiceDate'].max() + pd.Timedelta(days=1)
+                
+                rfm = calculate_rfm(df, snapshot_date)
+                
+                # Preprocessing
+                rfm_weighted = rfm[["Recency", "Frequency", "Monetary"]].copy()
+                rfm_weighted["Recency"] = rfm_weighted["Recency"] / 2
+                rfm_weighted["Frequency"] = rfm_weighted["Frequency"] * 3
+                rfm_weighted["Monetary"] = rfm_weighted["Monetary"] * 1.5
+                
+                if scaler:
+                    rfm_scaled = scaler.transform(rfm_weighted)
+                else:
+                    rfm_scaled = rfm_weighted.values
+                    
+                return rfm, rfm_scaled
+            except Exception as e:
+                st.error(f"Error processing Online Retail.xlsx: {e}")
+                return None, None
+        return None, None
+
     col1, col2 = st.columns(2)
     
     with col1:
@@ -538,33 +568,9 @@ elif page == "Model Specs":
             st.write(f"**Inertia:** {kmeans_model.inertia_:.2f}")
             
             # Try to load original data for metrics
-            if os.path.exists('Online Retail.xlsx'):
-                try:
-                    # Load and process data (Cached for performance)
-                    @st.cache_data
-                    def get_training_metrics():
-                        df = pd.read_excel('Online Retail.xlsx')
-                        df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
-                        
-                        # Use max date + 1 day as snapshot to match training context (avoiding 5000+ day recency)
-                        snapshot_date = df['InvoiceDate'].max() + pd.Timedelta(days=1)
-                        
-                        rfm = calculate_rfm(df, snapshot_date)
-                        
-                        # Preprocessing
-                        rfm_weighted = rfm[["Recency", "Frequency", "Monetary"]].copy()
-                        rfm_weighted["Recency"] = rfm_weighted["Recency"] / 2
-                        rfm_weighted["Frequency"] = rfm_weighted["Frequency"] * 3
-                        rfm_weighted["Monetary"] = rfm_weighted["Monetary"] * 1.5
-                        
-                        if scaler:
-                            rfm_scaled = scaler.transform(rfm_weighted)
-                        else:
-                            rfm_scaled = rfm_weighted.values
-                            
-                        return rfm, rfm_scaled
-
-                    rfm_real, rfm_scaled_real = get_training_metrics()
+            rfm_real, rfm_scaled_real = get_training_metrics()
+            
+            if rfm_real is not None:
                     
                     labels = kmeans_model.predict(rfm_scaled_real)
                     
@@ -592,13 +598,7 @@ elif page == "Model Specs":
                         st.write(f"**{title}**")
                         st.scatter_chart(rfm_real, x=x_col, y=y_col, color='Cluster_Name')
                         
-                except Exception as e:
-                    st.warning(f"Could not calculate metrics from Online Retail.xlsx: {e}")
-                    # Fallback to centroids
-                    st.subheader("Cluster Centers (Centroids)")
-                    centers_df = pd.DataFrame(kmeans_model.cluster_centers_, columns=['Recency', 'Frequency', 'Monetary'])
-                    centers_df['Cluster'] = [get_cluster_name(i) for i in range(len(centers_df))]
-                    st.dataframe(centers_df.style.highlight_max(axis=0))
+
             else:
                 # Silhouette Score (Training data not available)
                 st.info("Silhouette Score requires 'Online Retail.xlsx' to be present.")
@@ -627,40 +627,61 @@ elif page == "Model Specs":
         if gmm_model:
             st.header("Gaussian Mixture Model")
             st.write(f"**Components:** {gmm_model.n_components}")
-            st.write(f"**Covariance Type:** {gmm_model.covariance_type}")
+            # Use Real Data for GMM
+            rfm_real, rfm_scaled_real = get_training_metrics()
             
-            if hasattr(gmm_model, 'lower_bound_'):
-                st.write(f"**Log-Likelihood:** {gmm_model.lower_bound_:.2f}")
-
-            # Generate Synthetic Data
-            try:
-                n_samples = 200
-                X_sampled, y_sampled = gmm_model.sample(n_samples)
+            if rfm_real is not None:
+                try:
+                    labels = gmm_model.predict(rfm_scaled_real)
+                    
+                    # Silhouette Score
+                    if len(rfm_scaled_real) > 10000:
+                        score = silhouette_score(rfm_scaled_real, labels, sample_size=10000)
+                        st.metric("Silhouette Score (Real Data - Sampled)", f"{score:.4f}")
+                    else:
+                        score = silhouette_score(rfm_scaled_real, labels)
+                        st.metric("Silhouette Score (Real Data)", f"{score:.4f}")
+                    
+                    st.subheader("Cluster Visualization (Real Data)")
+                    rfm_real['Cluster'] = labels
+                    rfm_real['Cluster_Name'] = [get_cluster_name(c) for c in labels]
+                    
+                    # Pairwise Plots for GMM
+                    pairs = [
+                        ('Recency', 'Frequency', 'Recency vs Frequency'),
+                        ('Frequency', 'Monetary', 'Frequency vs Monetary'),
+                        ('Recency', 'Monetary', 'Recency vs Monetary')
+                    ]
+                    
+                    for x_col, y_col, title in pairs:
+                        st.write(f"**{title}**")
+                        st.scatter_chart(rfm_real, x=x_col, y=y_col, color='Cluster_Name')
                 
-                if len(set(y_sampled)) > 1:
-                    syn_score = silhouette_score(X_sampled, y_sampled)
-                    st.metric("Silhouette Score (Estimated)", f"{syn_score:.4f}")
+                except Exception as e:
+                     st.warning(f"Could not calculate metrics for GMM: {e}")
+            else:
+                st.info("Silhouette Score requires 'Online Retail.xlsx' to be present.")
                 
-                st.subheader("Cluster Visualization (Synthetic)")
-                st.write(f"Generated {n_samples} points to visualize cluster distribution.")
-                
-                syn_df = pd.DataFrame(X_sampled, columns=['Recency', 'Frequency', 'Monetary'])
-                syn_df['Cluster'] = [get_cluster_name(c) for c in y_sampled]
-                
-                # Pairwise Plots for GMM
-                pairs = [
-                    ('Recency', 'Frequency', 'Recency vs Frequency'),
-                    ('Frequency', 'Monetary', 'Frequency vs Monetary'),
-                    ('Recency', 'Monetary', 'Recency vs Monetary')
-                ]
-                
-                for x_col, y_col, title in pairs:
-                    st.write(f"**{title}**")
-                    st.scatter_chart(syn_df, x=x_col, y=y_col, color='Cluster')
-                    st.caption(f"Synthetic distribution of clusters for {x_col} and {y_col}.")
-                
-            except Exception as e:
-                st.warning(f"Could not generate synthetic visualization: {e}")
+                # Fallback to Synthetic if Real Data fails
+                st.subheader("Cluster Visualization (Synthetic Fallback)")
+                try:
+                    n_samples = 200
+                    X_sampled, y_sampled = gmm_model.sample(n_samples)
+                    
+                    syn_df = pd.DataFrame(X_sampled, columns=['Recency', 'Frequency', 'Monetary'])
+                    syn_df['Cluster'] = [get_cluster_name(c) for c in y_sampled]
+                    
+                    pairs = [
+                        ('Recency', 'Frequency', 'Recency vs Frequency'),
+                        ('Frequency', 'Monetary', 'Frequency vs Monetary'),
+                        ('Recency', 'Monetary', 'Recency vs Monetary')
+                    ]
+                    
+                    for x_col, y_col, title in pairs:
+                        st.write(f"**{title}**")
+                        st.scatter_chart(syn_df, x=x_col, y=y_col, color='Cluster')
+                except Exception as e:
+                    st.warning(f"Could not generate synthetic visualization: {e}")
 
             st.subheader("Cluster Weights")
             weights_df = pd.DataFrame(gmm_model.weights_, columns=['Weight'])
